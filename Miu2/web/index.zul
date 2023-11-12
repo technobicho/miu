@@ -1,0 +1,289 @@
+<?page title="Mapa Interactivo Universitario" contentType="text/html;charset=UTF-8"?>
+
+<zk >    
+    <window border="normal" id="wIndex" xmlns:h="http://www.w3.org/1999/xhtml"
+    width="99%">
+
+        
+        <style src="/miu.css"/>
+        <script type="text/javascript">
+            document.body.scroll = 'auto';
+        </script>
+        <!--
+        <zscript src="/zscripts/consultar.zs"/>
+       
+        <div class="contenedor">
+            <image id="logo" src="/img/logo-U_MIU.jpg" height="98px" />
+            <image class="banner"/>
+        </div>
+         -->
+        <borderlayout height="1000px" id="blPrincipal">
+            <west>
+                <tablelayout columns="1" >
+                    <tablechildren>
+                        <panel id="pSedes" title="Sedes"
+                                           border="normal" 
+                                           collapsible="false" 
+                                           width="210px" 
+                                           height="70px">
+                            <panelchildren>
+                                <listbox id="lSedes"
+                                use="co.edu.ucentral.aplicacion.SedesLista"/>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    <tablechildren>
+                        <panel id="pEdificios" title="Edificios"
+				               border="normal" 
+                                               collapsible="true" 
+                                               width="210px" 
+                                               height="400px"
+					       open="false">                            
+                            <attribute name="onOpen">
+				pDependencias.setOpen(false);
+				pZonas.setOpen(false);
+                            </attribute>
+                            <panelchildren>
+                                <listbox id="lbxEdificios"
+					 use="co.edu.ucentral.aplicacion.EdificiosLista">                                    
+                                </listbox>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    <tablechildren >
+                        <panel id="pDependencias" title="Dependencias"
+						  border="normal" 
+                                                  collapsible="true" 
+                                                  width="210px" 
+                                                  height="400px"
+						  open="false">
+                            <attribute name="onOpen">
+				pEdificios.setOpen(false);
+				pZonas.setOpen(false);
+                            </attribute>
+                            <panelchildren>
+                                <tree id="tDependencias"
+                                    use="co.edu.ucentral.aplicacion.DependenciasArbol"
+                                    fixedLayout="true" 
+                                    rows="15"
+                                    multiple="true">                                    
+                                </tree>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    
+                    <tablechildren>
+                        <panel id="pZonas" title="Zonas"
+					   border="normal" 
+                                           collapsible="true" 
+                                           width="210px" 
+                                           height="400px"
+					   open="false">
+                            <attribute name="onOpen">
+				pEdificios.setOpen(false);
+				pDependencias.setOpen(false);
+                            </attribute>
+                            <panelchildren>
+                                <tree id="tZonas"
+                                    use="co.edu.ucentral.aplicacion.ZonasArbol"
+                                    fixedLayout="true"
+                                    rows="15"
+                                    multiple="true">
+                                </tree>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    
+                </tablelayout>
+            </west>
+            <center flex="true">
+                <tabbox>
+                    <tabs>
+                        <tab id="tbMapa" label="Mapa"/>
+                        <tab id="tbBuscar" label="Buscar"/>
+                        <tab id="tbDocentes" label="Docentes"/>
+                    </tabs>
+                    <tabpanels>
+                        <tabpanel id="tpMapa">
+                            <div>
+                                <iframe id="ifMapa"
+                                                                width="99%"
+                                                                height="500px"
+                                                                src="mapa.html"/>
+                            </div>
+                            <image id="contenido" src="/img/contenido.png"
+                                                                height="150px" width="400px"/>
+                             
+                        </tabpanel>
+                        <tabpanel id="tpBuscaEspacio">
+                           
+                            <textbox id="tbxBuscarEspacio">
+                                <attribute name="onOK">
+                                    lbxResultado.consultaEspacios(tbxBuscarEspacio.value);
+                                </attribute>
+                            </textbox>
+                            <button label="Buscar">
+                                <attribute name="onClick">
+                                    lbxResultado.consultaEspacios(tbxBuscarEspacio.value);
+                                </attribute>
+                            </button>
+                            <separator bar="true"/>
+                            <listbox
+                                                    id="lbxResultado"
+                                                    use="co.edu.ucentral.aplicacion.BuscaLista"
+                                                    mold="paging" pageSize="20"/>
+                        </tabpanel>
+                        <tabpanel id="tpBuscaDocente">
+                            <!--
+                            <bandbox id="bd" autodrop="true" >
+                                <bandpopup>
+                                    <vbox>
+                                        <hbox>
+                                            Buscar
+                                            <textbox id="tbxBuscaDocente">
+                                                <attribute name="onOK">
+                                                    lbxDocentes.consultaDocentes(tbxBuscaDocente.value);
+                                                </attribute>
+                                            </textbox>
+                                        </hbox>
+                                        <listbox    id="lbxDocentes"
+                                                                    width="300px"
+                                                                    use="co.edu.ucentral.aplicacion.BuscaDocenteLista"
+                                                                    onSelect="bd.value=self.selectedItem.label; bd.closeDropdown();">
+                                            <listhead>
+                                                <listheader label="Nombre" />
+                                            </listhead>
+                                        </listbox>
+                                    </vbox>
+                                </bandpopup>
+                            </bandbox>
+                            -->
+                            <hbox>
+                                <vbox>
+                                    <label value="Realice la consulta de horario semanal para un docente:"/>
+                                    <label value="Si, no conoce el nombre del docente, puede buscarlo por asignatura"/>
+                                    <grid width="600px">
+                                        <columns>
+                                            <column width="100px"/>
+                                            <column width="200px"/>
+                                            <column width="300px"/>
+                                        </columns>
+                                        <rows>
+                                            <row>
+                                                <label id="lblbsqMateria" value="Asignatura: " style=" font-weight: bold"/>
+                                                <hbox>
+                                                    <textbox id="tbxBsqMateria" value=""
+                                                                />
+                                                    <button id="btnAsignatura" image="/img/search.gif">
+                                                        <attribute name="onClick">
+                                                                cbxMateria.setComboitems(tbxBsqMateria.value);
+                                                        </attribute>
+                                                    </button>
+                                                    <image src="/img/QuestionmarkButton-16x16.png" tooltip="asignatura" style="cursor:help"/>
+                                                </hbox>
+                                                <combobox id="cbxMateria" width="90%" use="co.edu.ucentral.aplicacion.BuscaMateriaCombo"/>
+                                            </row>
+                                            <row>
+                                                <label id="lblbsqDocente" value="Docente: "  style=" font-weight: bold"/>
+                                                <hbox>
+                                                    <textbox id="tbxBsqDocente" value="" />
+                                                    <button id="btnDocente" image="/img/search.gif">
+                                                        <attribute name="onClick">
+                                                                cbxDocente.setComboitems(tbxBsqDocente.value);
+                                                        </attribute>
+                                                    </button>
+                                                    <image src="/img/QuestionmarkButton-16x16.png" tooltip="docente" style="cursor:help"/>
+                                                </hbox>
+                                                <combobox  id="cbxDocente" width="90%" use="co.edu.ucentral.aplicacion.BuscaDocenteCombo"/>
+                                            </row>
+                                        </rows>
+                                    </grid>
+                                    
+                                </vbox>
+                            </hbox>
+                           
+                            <separator bar="true"/>
+                            <grid fixedLayout="true" id="grdHorario"
+                            width="650px">
+                                
+                                <columns >
+                                    <column label="hora" width="50px"/>
+                                    <column label="Lunes" width="100px"/>
+                                    <column label="Martes" width="100px"/>
+                                    <column label="Miercoles"  width="100px"/>
+                                    <column label="Jueves" width="100px"/>
+                                    <column label="Viernes" width="100px"/>
+                                    <column label="Sabado" width="100px"/>
+                                </columns>
+                            </grid>
+                        </tabpanel>
+                    </tabpanels>
+                </tabbox>
+            </center>
+            <east  width="310px" title="Información"
+             collapsible="true" open="false">
+                <tablelayout>
+                    <tablechildren>
+                        <panel id="pFoto"
+                               title="Fotografia"
+                               border ="normal" 
+                               collapsible="true"
+                               height="300px"
+                               width="300px"
+                               open="false">
+                            <panelchildren>
+                                <grid>
+                                    <rows>
+                                        <row>
+                                            <image id="imgEdf"  style="height:190px;margin-left: auto;margin-right: auto;display:block"  />
+                                        </row>
+                                        <row>
+                                            <label id="lblDescripcion"/>
+                                        </row>
+                                    </rows>
+                                </grid>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    <tablechildren>
+                        <panel id="pPisos" title="Pisos"
+                                           border="normal" 
+                                           collapsible="true"
+                                           width="300px"
+                                           open="false">
+                            <panelchildren>
+                                <tabbox id="tbPisos" use="co.edu.ucentral.aplicacion.PisosTabs"/>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                    <tablechildren>
+                        <panel id="pDepen"
+                                           border="normal"
+                                           collapsible="true" 
+                                           width="300px"
+                                           height="400px" 
+                                           open="false">
+                            <panelchildren>
+                                <grid id="grdInformacion"/>
+                            </panelchildren>
+                        </panel>
+                    </tablechildren>
+                </tablelayout>
+            </east>
+        </borderlayout>
+    </window>
+    <popup id="asignatura" width="300px">
+        <html>
+            Ingrese minimo 3 caracteres, que pertenezcan al
+            nombre de la asignatura, haga click en la opción de busqueda
+            y seleccione uno de los resultados obtenidos.
+        </html>
+    </popup>
+    <popup id="docente" width="300px">
+        <html>
+            Ingrese minimo 3 caracteres, que pertenezcan al
+            nombre del docente, haga click en la opcion de busqueda
+            y seleccione uno de los resultados obtenidos.
+        </html>
+    </popup>
+</zk>

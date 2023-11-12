@@ -1,0 +1,23 @@
+ALTER TABLE ucentral2.public.edificio_info DROP CONSTRAINT FK_edificio_info_uso
+ALTER TABLE ucentral2.public.edificio_info DROP CONSTRAINT FK_edificio_info_ciudad
+ALTER TABLE ucentral2.public.edificio_info DROP CONSTRAINT FK_edificio_info_sede
+ALTER TABLE ucentral2.public.edificio_piso DROP CONSTRAINT FK_edificio_piso_id_edificio
+ALTER TABLE ciudad DROP CONSTRAINT FK_ciudad_id_dept
+ALTER TABLE zona_info DROP CONSTRAINT FK_zona_info_sede_zona
+ALTER TABLE funcionario DROP CONSTRAINT FK_funcionario_cargo
+ALTER TABLE funcionario DROP CONSTRAINT FK_funcionario_edf_espacio
+ALTER TABLE ucentral2.public.edificio_espacio DROP CONSTRAINT FK_edificio_espacio_id_piso
+ALTER TABLE ucentral2.public.edificio_espacio DROP CONSTRAINT FK_edificio_espacio_tipo_espacio
+ALTER TABLE cargo_funcionario DROP CONSTRAINT FK_cargo_funcionario_tipo_cargo
+DROP TABLE ucentral2.public.edificio_info
+DROP TABLE ucentral2.public.edificio_piso
+DROP TABLE sede_info
+DROP TABLE tipo_uso
+DROP TABLE ciudad
+DROP TABLE departamento
+DROP TABLE tipo_espacio
+DROP TABLE zona_info
+DROP TABLE tipo_cargo
+DROP TABLE funcionario
+DROP TABLE ucentral2.public.edificio_espacio
+DROP TABLE cargo_funcionario

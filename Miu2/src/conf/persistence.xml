@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="1.0" xmlns="http://java.sun.com/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd">
+  <persistence-unit name="Miu2PU" transaction-type="RESOURCE_LOCAL">
+    <provider>oracle.toplink.essentials.PersistenceProvider</provider>
+    <class>co.edu.ucentral.modelo.Listnom</class>
+    <class>co.edu.ucentral.modelo.Espacios</class>
+    <class>co.edu.ucentral.modelo.EdfCargo</class>
+    <class>co.edu.ucentral.modelo.ZonaLocaliza</class>
+    <class>co.edu.ucentral.modelo.EdfLocaliza</class>
+    <class>co.edu.ucentral.modelo.SedeLocaliza</class>
+    <class>co.edu.ucentral.modelo.TipoZona</class>
+    <class>co.edu.ucentral.modelo.ZonaInfo</class>
+    <exclude-unlisted-classes>false</exclude-unlisted-classes>
+    <properties>
+      <property name="toplink.jdbc.user" value="postgres"/>
+      <property name="toplink.jdbc.password" value="ucentral2009"/>
+      <property name="toplink.jdbc.url" value="jdbc:postgresql://localhost:5432/ucentral2"/>
+      <property name="toplink.jdbc.driver" value="org.postgresql.Driver"/>
+     <!--
+     <property name="toplink.cache.type.default" value="Full"/>
+     -->
+      <property name="toplink.cache.shared.default" value="true"/>
+      <property name="toplink.jdbc.write-connections.max" value="100"/>
+    </properties>
+  </persistence-unit>
+  <persistence-unit name="Miu2PU2" transaction-type="RESOURCE_LOCAL">
+    <provider>oracle.toplink.essentials.PersistenceProvider</provider>
+    <exclude-unlisted-classes>false</exclude-unlisted-classes>
+    <properties>
+      <property name="toplink.jdbc.user" value="postgres"/>
+      <property name="toplink.jdbc.password" value="ucentral2009"/>
+      <property name="toplink.jdbc.url" value="jdbc:postgresql://localhost:5432/udocentes"/>
+      <property name="toplink.jdbc.driver" value="org.postgresql.Driver"/>
+      <property name="toplink.jdbc.write-connections.max" value="100"/>
+    </properties>
+  </persistence-unit>
+  <persistence-unit name="Miu2PU3" transaction-type="RESOURCE_LOCAL">
+    <provider>oracle.toplink.essentials.PersistenceProvider</provider>
+    <class>co.edu.ucentral.modelo.UccVwasignaturamapa</class>
+    <class>co.edu.ucentral.modelo.UccVwmallamapainteractivo</class>
+    <class>co.edu.ucentral.modelo.UccVwprofesormapa</class>
+    <exclude-unlisted-classes>true</exclude-unlisted-classes>
+    <properties>
+      <property name="toplink.jdbc.user" value="ucc_solacademica"/>
+      <property name="toplink.jdbc.password" value="A9FB92F2BC45B634A35EBD6C26E90C"/>
+      <property name="toplink.jdbc.url" value="jdbc:oracle:thin:@172.18.35.20:1521:ucc"/>
+      <property name="toplink.jdbc.driver" value="oracle.jdbc.OracleDriver"/>
+    </properties>
+  </persistence-unit>
+</persistence>

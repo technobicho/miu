@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="1.0" xmlns="http://java.sun.com/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd">
+  <persistence-unit name="ucentral2PU" transaction-type="RESOURCE_LOCAL">
+    <provider>oracle.toplink.essentials.PersistenceProvider</provider>
+    <class>mapaadmin.dao.CargoFuncionario</class>
+    <class>mapaadmin.dao.SedeInfo</class>
+    <class>mapaadmin.dao.Funcionario</class>
+    <class>mapaadmin.dao.TipoUso</class>
+    <class>mapaadmin.dao.Ciudad</class>
+    <class>mapaadmin.dao.ZonaInfo</class>
+    <class>mapaadmin.dao.Departamento</class>
+    <class>mapaadmin.dao.EdificioPiso</class>
+    <class>mapaadmin.dao.EdificioInfo</class>
+    <class>mapaadmin.dao.TipoEspacio</class>
+    <class>mapaadmin.dao.EdificioEspacio</class>
+    <class>mapaadmin.dao.TipoCargo</class>
+    <class>mapaadmin.dao.TipoZona</class>
+    <properties>
+      <property name="toplink.jdbc.user" value="postgres"/>
+      <property name="toplink.jdbc.password" value="ucentral2009"/>
+      <property name="toplink.jdbc.url" value="jdbc:postgresql://localhost:5432/ucentral2"/>
+      <property name="toplink.jdbc.driver" value="org.postgresql.Driver"/>
+      <property name="toplink.cache.size.default" value="50"/>
+    </properties>
+  </persistence-unit>
+</persistence>

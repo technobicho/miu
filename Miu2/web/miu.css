@@ -1,0 +1,245 @@
+
+.banner{ text-align:left; background-image: url(img/degrad.jpg);
+         width: 100%;
+         height: 98px;
+         background-repeat: repeat-x;
+         background-color: black;
+         position: absolute;
+}
+
+.contenedor{    
+    position: relative;    
+}
+
+div.z-grid {
+    
+    background:#DAE7F6 none repeat scroll 0 0;
+    border:1px solid #f3e7cc;
+    overflow:hidden;
+}
+
+.z-panel-header {
+    color:   #636f07;
+    font-family: Arial,Helvetica,sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    background-image: url(img/fondo_curuba.png);
+    background-repeat: repeat-x;
+    background-attachment: scroll;
+    background-position: 0 0;
+}
+
+.z-tab .z-tab-text{
+    color:   #636f07;
+    font-family: Arial,Helvetica,sans-serif;
+    font-size: 14px;
+    font-weight: bold;    
+    font-variant: normal;
+}
+
+.z-tab-seld .z-tab-text {
+    color:   #b11f16;
+}
+
+.z-tab .z-tab-hl:hover .z-tab-text {
+    color:#b11f16;
+}
+
+.z-tabs-scroll .z-tabs-cnt {
+    
+    background-image: url(img/degrad.jpg);
+    border-bottom:1px solid #f3e7cc;
+    border: 1px solid #f3e7cc;
+    display:block;
+    list-style-image:none;
+    list-style-position:outside;
+    list-style-type:none;
+    margin:0;
+    padding-left:5px;
+    padding-top:1px;
+
+}
+
+.z-tab-hm {
+    
+    background:transparent url(img/tab-hm.png) repeat-x scroll 0 -128px;
+    cursor:pointer;
+    overflow:hidden;
+    padding-left:2px;
+    padding-right:1px;
+}
+
+.z-tab-hl {
+    
+    background:transparent url(img/tab-corner.png) no-repeat scroll 0 -128px;
+    cursor:pointer;
+    outline-color:-moz-use-text-color;
+    outline-style:none;
+    outline-width:medium;
+    padding-left:10px;
+    position:relative;
+}
+
+.z-tab-hr {
+    
+    background:transparent url(img/tab-corner.png) no-repeat scroll right -128px;
+    display:block;
+    padding-right:10px;
+}
+
+.z-border-layout {
+    background-color:#f3e7cc;
+    border:0 none;
+    height:100%;
+    overflow:hidden;
+    position:relative;
+    visibility:hidden;
+    width:100%;
+}
+
+.z-north, .z-south, .z-west, .z-center, .z-east {
+    background-color:white;
+    border:1px solid #f3e7cc;
+    overflow:hidden;
+    position:absolute;
+}
+
+.z-east-colpsd, .z-west-colpsd, .z-south-colpsd, .z-north-colpsd {
+    background-color:#f3e7cc;
+    border:1px solid #b11f16;
+    height:22px;
+    overflow:hidden;
+    position:absolute;
+    width:22px;
+    z-index:30;
+}
+
+.z-west-header, .z-center-header, .z-east-header, .z-north-header, .z-south-header {
+    
+    background-image: url(img/degrad.jpg);
+    border-bottom:1px solid #9ECAD8;
+    color:#b11f16;
+    font-family:Tahoma,Verdana,Arial,Helvetica,sans-serif;
+    font-size:11px;
+    font-weight:bold;
+    line-height:15px;
+    overflow:hidden;
+    padding:5px 3px 4px 5px;
+    white-space:nowrap;
+}
+
+.z-north, .z-south, .z-west, .z-center, .z-east {
+    background-color:white;
+    border:1px solid #b11f16;
+    overflow:hidden;
+    position:absolute;
+}
+
+.z-tabpanel, .z-tabbox-ver .z-tabpanels-ver {
+    border:1px solid #b11f16;
+}
+
+tr.z-listbox-odd {
+   
+    background:#f3e7cc none repeat scroll 0 0;
+}
+
+tr.z-grid-odd td.z-row-inner, tr.z-grid-odd
+{
+    
+    background:#f3e7cc none repeat scroll 0 0;
+}
+
+tr.z-list-item-seld{
+    
+    background:#f3e7cc none repeat scroll 0 0;
+    border:1px solid #b11f16;
+    color:#b11f16;
+}
+
+tr.z-list-item-over{
+    
+    background:#f3e7cc none repeat scroll 0 0;
+    border:1px solid #b11f16;
+    color:#b11f16;
+}
+
+div.z-listbox-header th.z-list-header, div.z-listbox-header th.z-auxheader {
+    border-color:#f3e7cc #b11f16 #b11f16 #f3e7cc;
+    border-style:solid;
+    border-width:1px;
+    color:   #b11f16;
+    font-size:12px;
+    font-weight:normal;
+    overflow:hidden;
+    padding:2px;
+    white-space:nowrap;
+    background-image: url(img/fondo_curuba.png);
+    background-repeat: repeat-x;
+    text-align: center;
+}
+
+div.z-listbox {
+    
+    background:#f3e7cc none repeat scroll 0 0;
+    border:1px solid #b11f16;
+    overflow:hidden;
+}
+
+.z-textbox, .z-decimalbox, .z-intbox, .z-longbox, .z-doublebox {
+    
+    background:#FFFFFF url(/zkau/web/zul/img/misc/text-bg.gif) repeat-x scroll 0 0;
+    border:1px solid #b11f16;
+    font-family:Verdana,Tahoma,Arial,Helvetica,sans-serif;
+    font-size:12px;
+    font-weight:normal;
+}
+
+tr.z-tree-row-over {
+    background:#f3e7cc none repeat scroll 0 0;
+    border:1px solid #b11f16;
+    color:#b11f16;
+}
+
+tr.z-tree-row-seld {
+    background:#f3e7cc none repeat scroll 0 0;
+    border:1px solid #b11f16;
+    color:#b11f16;
+}
+
+.z-panel-icon {
+background-image:url(img/btn.gif);
+}
+
+span.z-tree-root-open, span.z-tree-tee-open, span.z-tree-last-open, span.z-tree-root-close, span.z-tree-tee-close, span.z-tree-last-close {
+background-image:url(img/toggle.gif);
+}
+
+.z-border-layout-icon {
+background-image: url(img/borderlayout-btn.gif) ;
+}
+
+.z-paging {
+
+background:#DAF3FF url(img/tab-hm.png) repeat-x scroll 0 center;
+
+}
+
+.z-paging-btn .z-paging-first, .z-paging-btn .z-paging-last, .z-paging-btn .z-paging-next, .z-paging-btn .z-paging-prev  {
+background-image:url(img/pg-btn.gif);
+}
+
+div.z-grid-header th.z-column, div.z-grid-header th.z-auxheader {
+border-color:#f3e7cc #b11f16 #b11f16 #f3e7cc;
+    border-style:solid;
+    border-width:1px;
+    color:   #b11f16;
+    font-size:12px;
+    font-weight:normal;
+    overflow:hidden;
+    padding:2px;
+    white-space:nowrap;
+    background-image: url(img/fondo_curuba.png);
+    background-repeat: repeat-x;
+    text-align: center;
+}

@@ -1,0 +1,1027 @@
+/*
+ * MapaAdminView.java
+ */
+package mapaadmin;
+
+import org.jdesktop.application.Action;
+import org.jdesktop.application.ResourceMap;
+import org.jdesktop.application.SingleFrameApplication;
+import org.jdesktop.application.FrameView;
+import org.jdesktop.application.TaskMonitor;
+import org.jdesktop.application.Task;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import javax.persistence.RollbackException;
+import javax.swing.Timer;
+import javax.swing.Icon;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+import org.jdesktop.beansbinding.AbstractBindingListener;
+import org.jdesktop.beansbinding.Binding;
+import org.jdesktop.beansbinding.PropertyStateEvent;
+
+/**
+ * The application's main frame.
+ */
+public class MapaAdminView extends FrameView {
+
+    public MapaAdminView(SingleFrameApplication app) {
+        super(app);
+
+        initComponents();
+
+        // status bar initialization - message timeout, idle icon and busy animation, etc
+        ResourceMap resourceMap = getResourceMap();
+        int messageTimeout = resourceMap.getInteger("StatusBar.messageTimeout");
+        messageTimer = new Timer(messageTimeout, new ActionListener() {
+
+            public void actionPerformed(ActionEvent e) {
+                statusMessageLabel.setText("");
+            }
+        });
+        messageTimer.setRepeats(false);
+        int busyAnimationRate = resourceMap.getInteger("StatusBar.busyAnimationRate");
+        for (int i = 0; i < busyIcons.length; i++) {
+            busyIcons[i] = resourceMap.getIcon("StatusBar.busyIcons[" + i + "]");
+        }
+        busyIconTimer = new Timer(busyAnimationRate, new ActionListener() {
+
+            public void actionPerformed(ActionEvent e) {
+                busyIconIndex = (busyIconIndex + 1) % busyIcons.length;
+                statusAnimationLabel.setIcon(busyIcons[busyIconIndex]);
+            }
+        });
+        idleIcon = resourceMap.getIcon("StatusBar.idleIcon");
+        statusAnimationLabel.setIcon(idleIcon);
+        progressBar.setVisible(false);
+
+        // connecting action tasks to status bar via TaskMonitor
+        TaskMonitor taskMonitor = new TaskMonitor(getApplication().getContext());
+        taskMonitor.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+
+            public void propertyChange(java.beans.PropertyChangeEvent evt) {
+                String propertyName = evt.getPropertyName();
+                if ("started".equals(propertyName)) {
+                    if (!busyIconTimer.isRunning()) {
+                        statusAnimationLabel.setIcon(busyIcons[0]);
+                        busyIconIndex = 0;
+                        busyIconTimer.start();
+                    }
+                    progressBar.setVisible(true);
+                    progressBar.setIndeterminate(true);
+                } else if ("done".equals(propertyName)) {
+                    busyIconTimer.stop();
+                    statusAnimationLabel.setIcon(idleIcon);
+                    progressBar.setVisible(false);
+                    progressBar.setValue(0);
+                } else if ("message".equals(propertyName)) {
+                    String text = (String) (evt.getNewValue());
+                    statusMessageLabel.setText((text == null) ? "" : text);
+                    messageTimer.restart();
+                } else if ("progress".equals(propertyName)) {
+                    int value = (Integer) (evt.getNewValue());
+                    progressBar.setVisible(true);
+                    progressBar.setIndeterminate(false);
+                    progressBar.setValue(value);
+                }
+            }
+        });
+
+        // tracking table selection
+        masterTable.getSelectionModel().addListSelectionListener(
+                new ListSelectionListener() {
+
+                    public void valueChanged(ListSelectionEvent e) {
+                        firePropertyChange("recordSelected", !isRecordSelected(), isRecordSelected());
+                    }
+                });
+        detailTable.getSelectionModel().addListSelectionListener(
+                new ListSelectionListener() {
+
+                    public void valueChanged(ListSelectionEvent e) {
+                        firePropertyChange("detailRecordSelected", !isDetailRecordSelected(), isDetailRecordSelected());
+                    }
+                });
+        espacioTable.getSelectionModel().addListSelectionListener(
+                new ListSelectionListener() {
+
+                    public void valueChanged(ListSelectionEvent e) {
+                        firePropertyChange("espacioRecordSelected", !isEspacioRecordSelected(), isEspacioRecordSelected());
+                    }
+                });
+
+        // tracking changes to save
+        bindingGroup.addBindingListener(new AbstractBindingListener() {
+
+            @Override
+            public void targetChanged(Binding binding, PropertyStateEvent event) {
+                // save action observes saveNeeded property
+                setSaveNeeded(true);
+            }
+        });
+
+        // have a transaction started
+        entityManager.getTransaction().begin();
+    }
+
+    public boolean isSaveNeeded() {
+        return saveNeeded;
+    }
+
+    private void setSaveNeeded(boolean saveNeeded) {
+        if (saveNeeded != this.saveNeeded) {
+            this.saveNeeded = saveNeeded;
+            firePropertyChange("saveNeeded", !saveNeeded, saveNeeded);
+        }
+    }
+
+    public boolean isRecordSelected() {
+        return masterTable.getSelectedRow() != -1;
+    }
+
+    public boolean isDetailRecordSelected() {
+        return detailTable.getSelectedRow() != -1;
+    }
+
+    public boolean isEspacioRecordSelected() {
+        return espacioTable.getSelectedRow() != -1;
+    }
+
+    @Action
+    public void newRecord() {
+        mapaadmin.EdificioInfo E = new mapaadmin.EdificioInfo();
+        entityManager.persist(E);
+        list.add(E);
+        int row = masterTable.getRowCount() - 1;
+        masterTable.setRowSelectionInterval(row, row);
+        masterTable.scrollRectToVisible(masterTable.getCellRect(row, 0, true));
+        setSaveNeeded(true);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewBuilding ce = new JDNewBuilding(mainFrame, false);
+        ce.setCurrentRecord(E);
+        ce.setVisible(true);
+        if (ce.isEdificioConfirmed()) {
+            save().run();
+        } else {
+            refresh().run();
+        }
+    }
+
+    @Action(enabledProperty = "recordSelected")
+    public void deleteRecord() {
+        Object[] options = {"OK", "Cancel"};
+        int n = JOptionPane.showConfirmDialog(null, "Borrar el registro permanentemente?", "Alerta!",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null);
+        if (n == JOptionPane.YES_OPTION) {
+            int[] selected = masterTable.getSelectedRows();
+            List<mapaadmin.EdificioInfo> toRemove = new ArrayList<mapaadmin.EdificioInfo>(selected.length);
+            for (int idx = 0; idx < selected.length; idx++) {
+                mapaadmin.EdificioInfo c = list.get(masterTable.convertRowIndexToModel(selected[idx]));
+                toRemove.add(c);
+                entityManager.remove(c);
+            }
+            list.removeAll(toRemove);
+            save().run();
+        } else {
+            refresh().run();
+        }
+    }
+
+    @Action(enabledProperty = "recordSelected")
+    public void newDetailRecord() {
+        int index = masterTable.getSelectedRow();
+        mapaadmin.EdificioInfo E = list.get(masterTable.convertRowIndexToModel(index));
+        Collection<mapaadmin.EdificioPiso> es = E.getEdificioPisoCollection();
+        if (es == null) {
+            es = new LinkedList<mapaadmin.EdificioPiso>();
+            E.setEdificioPisoCollection((List) es);
+        }
+        mapaadmin.EdificioPiso e = new mapaadmin.EdificioPiso();
+        entityManager.persist(e);
+        e.setIdEdificio(E);
+        es.add(e);
+        masterTable.clearSelection();
+        masterTable.setRowSelectionInterval(index, index);
+        int row = es.size() - 1;
+        detailTable.setRowSelectionInterval(row, row);
+        detailTable.scrollRectToVisible(detailTable.getCellRect(row, 0, true));
+        setSaveNeeded(true);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewFloor ce = new JDNewFloor(mainFrame, false);
+        ce.setCurrentRecord(e);
+        ce.setVisible(true);
+    }
+
+    @Action(enabledProperty = "detailRecordSelected")
+    public void deleteDetailRecord() {
+        Object[] options = {"OK", "Cancel"};
+        int n = JOptionPane.showConfirmDialog(null, "Borrar el registro permanentemente?", "Alerta!",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null);
+        if (n == JOptionPane.YES_OPTION) {
+            int index = masterTable.getSelectedRow();
+            mapaadmin.EdificioInfo E = list.get(masterTable.convertRowIndexToModel(index));
+            Collection<mapaadmin.EdificioPiso> es = E.getEdificioPisoCollection();
+            int[] selected = detailTable.getSelectedRows();
+            List<mapaadmin.EdificioPiso> toRemove = new ArrayList<mapaadmin.EdificioPiso>(selected.length);
+            for (int idx = 0; idx < selected.length; idx++) {
+                selected[idx] = detailTable.convertRowIndexToModel(selected[idx]);
+                int count = 0;
+                Iterator<mapaadmin.EdificioPiso> iter = es.iterator();
+                while (count++ < selected[idx]) {
+                    iter.next();
+                }
+                mapaadmin.EdificioPiso e = iter.next();
+                toRemove.add(e);
+                entityManager.remove(e);
+            }
+            es.removeAll(toRemove);
+            masterTable.clearSelection();
+            masterTable.setRowSelectionInterval(index, index);
+            setSaveNeeded(true);
+        }
+    }
+
+    //Accion para nuevos registros en la tabla espacios
+    @Action(enabledProperty = "recordSelected")
+    public void newEspacioRecord() {
+        int indexEdf = masterTable.getSelectedRow();
+        mapaadmin.EdificioInfo edfInfo = list.get(masterTable.convertRowIndexToModel(indexEdf));
+        Collection<mapaadmin.EdificioPiso> edfPiso = edfInfo.getEdificioPisoCollection();
+        List<mapaadmin.EdificioPiso> ledf = (List<EdificioPiso>) edfPiso;
+        int indexPiso = detailTable.getSelectedRow();
+        mapaadmin.EdificioPiso E = ledf.get(detailTable.convertRowIndexToModel(indexPiso));
+        Collection<mapaadmin.EdificioEspacio> es = E.getEdificioEspacioCollection();
+        if (es == null) {
+            es = new LinkedList<mapaadmin.EdificioEspacio>();
+            E.setEdificioEspacioCollection((List) es);
+        }
+        mapaadmin.EdificioEspacio e = new mapaadmin.EdificioEspacio();
+        entityManager.persist(e);
+        e.setIdPiso(E);
+        es.add(e);
+        detailTable.clearSelection();
+        detailTable.setRowSelectionInterval(indexPiso, indexPiso);
+        int row = es.size() - 1;
+        espacioTable.setRowSelectionInterval(row, row);
+        espacioTable.scrollRectToVisible(espacioTable.getCellRect(row, 0, true));
+        setSaveNeeded(true);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewFuncionario2 ce = new JDNewFuncionario2(mainFrame, false,espacioTable,es);
+        ce.setCurrentRecord(e);
+        ce.setVisible(true);
+    }
+
+    @Action(enabledProperty = "espacioRecordSelected")
+    public void deleteEspacioRecord() {
+        Object[] options = {"OK", "Cancel"};
+        int n = JOptionPane.showConfirmDialog(null, "Borrar el registro permanentemente?", "Alerta!",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null);
+        if (n == JOptionPane.YES_OPTION) {
+            int indexEdf = masterTable.getSelectedRow();
+            mapaadmin.EdificioInfo edfInfo = list.get(masterTable.convertRowIndexToModel(indexEdf));
+            Collection<mapaadmin.EdificioPiso> edfPiso = edfInfo.getEdificioPisoCollection();
+            List<mapaadmin.EdificioPiso> ledf = (List<EdificioPiso>) edfPiso;
+            int index = detailTable.getSelectedRow();
+            mapaadmin.EdificioPiso E = ledf.get(detailTable.convertRowIndexToModel(index));
+            Collection<mapaadmin.EdificioEspacio> es = E.getEdificioEspacioCollection();
+            int[] selected = espacioTable.getSelectedRows();
+            List<mapaadmin.EdificioEspacio> toRemove = new ArrayList<mapaadmin.EdificioEspacio>(selected.length);
+            for (int idx = 0; idx < selected.length; idx++) {
+                selected[idx] = espacioTable.convertRowIndexToModel(selected[idx]);
+                int count = 0;
+                Iterator<mapaadmin.EdificioEspacio> iter = es.iterator();
+                while (count++ < selected[idx]) {
+                    iter.next();
+                }
+                mapaadmin.EdificioEspacio e = iter.next();
+                toRemove.add(e);
+                entityManager.remove(e);
+            }
+            es.removeAll(toRemove);
+            masterTable.clearSelection();
+            masterTable.setRowSelectionInterval(index, index);
+            setSaveNeeded(true);
+        }
+    }
+
+    @Action(enabledProperty = "saveNeeded")
+    public Task save() {
+        return new SaveTask(getApplication());
+    }
+
+    private class SaveTask extends Task {
+
+        SaveTask(org.jdesktop.application.Application app) {
+            super(app);
+        }
+
+        @Override
+        protected Void doInBackground() {
+            try {
+                entityManager.getTransaction().commit();
+                entityManager.getTransaction().begin();
+            } catch (RollbackException rex) {
+                rex.printStackTrace();
+                entityManager.getTransaction().begin();
+                List<mapaadmin.EdificioInfo> merged = new ArrayList<mapaadmin.EdificioInfo>(list.size());
+                for (mapaadmin.EdificioInfo E : list) {
+                    merged.add(entityManager.merge(E));
+                }
+                list.clear();
+                list.addAll(merged);
+            }
+            return null;
+        }
+
+        @Override
+        protected void finished() {
+            setSaveNeeded(false);
+        }
+    }
+
+    /**
+     * An example action method showing how to create asynchronous tasks
+     * (running on background) and how to show their progress. Note the
+     * artificial 'Thread.sleep' calls making the task long enough to see the
+     * progress visualization - remove the sleeps for real application.
+     */
+    @Action
+    public Task refresh() {
+        return new RefreshTask(getApplication());
+    }
+
+    private class RefreshTask extends Task {
+
+        RefreshTask(org.jdesktop.application.Application app) {
+            super(app);
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        protected Void doInBackground() {
+            try {
+                setProgress(0, 0, 4);
+                setMessage("Retrasando los cambios actuales...");
+                setProgress(1, 0, 4);
+                entityManager.getTransaction().rollback();
+                //Thread.sleep(1000L); // remove for real app
+                setProgress(2, 0, 4);
+
+                setMessage("Iniciando nueva transaccion...");
+                entityManager.getTransaction().begin();
+                //Thread.sleep(500L); // remove for real app
+                setProgress(3, 0, 4);
+
+                setMessage("Obtención de nuevos datos...");
+                java.util.Collection data = query.getResultList();
+                for (Object entity : data) {
+                    entityManager.refresh(entity);
+                }
+                //Thread.sleep(1300L); // remove for real app
+                setProgress(4, 0, 4);
+
+                Thread.sleep(150L); // remove for real app
+                list.clear();
+                list.addAll(data);
+            } catch (InterruptedException ignore) {
+            }
+            return null;
+        }
+
+        @Override
+        protected void finished() {
+            setMessage("Hecho.");
+            setSaveNeeded(false);
+        }
+    }
+
+    @Action
+    public void showAboutBox() {
+        if (aboutBox == null) {
+            JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+            aboutBox = new MapaAdminAboutBox(mainFrame);
+            aboutBox.setLocationRelativeTo(mainFrame);
+        }
+        MapaAdminApp.getApplication().show(aboutBox);
+    }
+
+    /** This method is called from within the constructor to
+     * initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is
+     * always regenerated by the Form Editor.
+     */
+    @SuppressWarnings("unchecked")
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
+        bindingGroup = new org.jdesktop.beansbinding.BindingGroup();
+
+        mainPanel = new javax.swing.JPanel();
+        masterScrollPane = new javax.swing.JScrollPane();
+        masterTable = new javax.swing.JTable();
+        newButton = new javax.swing.JButton();
+        deleteButton = new javax.swing.JButton();
+        detailScrollPane = new javax.swing.JScrollPane();
+        detailTable = new javax.swing.JTable();
+        deleteDetailButton = new javax.swing.JButton();
+        newDetailButton = new javax.swing.JButton();
+        jButton1 = new javax.swing.JButton();
+        jLabel1 = new javax.swing.JLabel();
+        jTextField1 = new javax.swing.JTextField();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        espacioTable = new javax.swing.JTable();
+        jButton2 = new javax.swing.JButton();
+        jButton3 = new javax.swing.JButton();
+        jButton4 = new javax.swing.JButton();
+        jButton5 = new javax.swing.JButton();
+        jScrollPane2 = new javax.swing.JScrollPane();
+        tblFuncionario = new javax.swing.JTable();
+        refreshButton = new javax.swing.JButton();
+        saveButton = new javax.swing.JButton();
+        jButton6 = new javax.swing.JButton();
+        jButton7 = new javax.swing.JButton();
+        jButton8 = new javax.swing.JButton();
+        menuBar = new javax.swing.JMenuBar();
+        javax.swing.JMenu fileMenu = new javax.swing.JMenu();
+        javax.swing.JMenuItem newRecordMenuItem = new javax.swing.JMenuItem();
+        javax.swing.JMenuItem deleteRecordMenuItem = new javax.swing.JMenuItem();
+        jSeparator1 = new javax.swing.JSeparator();
+        javax.swing.JMenuItem saveMenuItem = new javax.swing.JMenuItem();
+        javax.swing.JMenuItem refreshMenuItem = new javax.swing.JMenuItem();
+        jSeparator2 = new javax.swing.JSeparator();
+        javax.swing.JMenuItem exitMenuItem = new javax.swing.JMenuItem();
+        jMenu1 = new javax.swing.JMenu();
+        jMenuItem1 = new javax.swing.JMenuItem();
+        jmiCargos = new javax.swing.JMenuItem();
+        jSeparator3 = new javax.swing.JSeparator();
+        jMenuItem2 = new javax.swing.JMenuItem();
+        javax.swing.JMenu helpMenu = new javax.swing.JMenu();
+        javax.swing.JMenuItem aboutMenuItem = new javax.swing.JMenuItem();
+        statusPanel = new javax.swing.JPanel();
+        javax.swing.JSeparator statusPanelSeparator = new javax.swing.JSeparator();
+        statusMessageLabel = new javax.swing.JLabel();
+        statusAnimationLabel = new javax.swing.JLabel();
+        progressBar = new javax.swing.JProgressBar();
+        org.jdesktop.application.ResourceMap resourceMap = org.jdesktop.application.Application.getInstance(mapaadmin.MapaAdminApp.class).getContext().getResourceMap(MapaAdminView.class);
+        entityManager = java.beans.Beans.isDesignTime() ? null : javax.persistence.Persistence.createEntityManagerFactory(resourceMap.getString("entityManager.persistenceUnit")).createEntityManager(); // NOI18N
+        query = java.beans.Beans.isDesignTime() ? null : entityManager.createQuery(resourceMap.getString("query.query")); // NOI18N
+        list = java.beans.Beans.isDesignTime() ? java.util.Collections.emptyList() : org.jdesktop.observablecollections.ObservableCollections.observableList(query.getResultList());
+        edificioEspacioQuery = java.beans.Beans.isDesignTime() ? null : entityManager.createQuery("SELECT e FROM EdificioEspacio e");
+        edificioEspacioList = java.beans.Beans.isDesignTime() ? java.util.Collections.emptyList() : edificioEspacioQuery.getResultList();
+        edificioPisoQuery = java.beans.Beans.isDesignTime() ? null : entityManager.createQuery("SELECT e FROM EdificioPiso e");
+        edificioPisoList = java.beans.Beans.isDesignTime() ? java.util.Collections.emptyList() : org.jdesktop.observablecollections.ObservableCollections.observableList(edificioPisoQuery.getResultList());
+        rowSorterToStringConverter1 = new mapaadmin.RowSorterToStringConverter();
+
+        mainPanel.setName("mainPanel"); // NOI18N
+
+        masterScrollPane.setName("masterScrollPane"); // NOI18N
+
+        masterTable.setName("masterTable"); // NOI18N
+
+        org.jdesktop.swingbinding.JTableBinding jTableBinding = org.jdesktop.swingbinding.SwingBindings.createJTableBinding(org.jdesktop.beansbinding.AutoBinding.UpdateStrategy.READ_WRITE, list, masterTable);
+        org.jdesktop.swingbinding.JTableBinding.ColumnBinding columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${idEdificio}"));
+        columnBinding.setColumnName("Id Edificio");
+        columnBinding.setColumnClass(Integer.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${nomEdificio}"));
+        columnBinding.setColumnName("Nom Edificio");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${direccion1}"));
+        columnBinding.setColumnName("Direccion1");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${direccion2}"));
+        columnBinding.setColumnName("Direccion2");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${fechaConstruccion}"));
+        columnBinding.setColumnName("Fecha Construccion");
+        columnBinding.setColumnClass(java.util.Date.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${ciudad.nomCiudad}"));
+        columnBinding.setColumnName("Ciudad.nom Ciudad");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${sede.nomSede}"));
+        columnBinding.setColumnName("Sede.nom Sede");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${descripcion}"));
+        columnBinding.setColumnName("Descripcion");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${fotografia}"));
+        columnBinding.setColumnName("Fotografia");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${uso.nomTipoUso}"));
+        columnBinding.setColumnName("Uso.nom Tipo Uso");
+        columnBinding.setColumnClass(String.class);
+        bindingGroup.addBinding(jTableBinding);
+        jTableBinding.bind();
+        masterScrollPane.setViewportView(masterTable);
+        masterTable.getColumnModel().getColumn(0).setHeaderValue(resourceMap.getString("masterTable.columnModel.title0")); // NOI18N
+        masterTable.getColumnModel().getColumn(1).setHeaderValue(resourceMap.getString("masterTable.columnModel.title1")); // NOI18N
+        masterTable.getColumnModel().getColumn(2).setHeaderValue(resourceMap.getString("masterTable.columnModel.title2")); // NOI18N
+        masterTable.getColumnModel().getColumn(3).setHeaderValue(resourceMap.getString("masterTable.columnModel.title3")); // NOI18N
+        masterTable.getColumnModel().getColumn(4).setHeaderValue(resourceMap.getString("masterTable.columnModel.title4")); // NOI18N
+        masterTable.getColumnModel().getColumn(5).setHeaderValue(resourceMap.getString("masterTable.columnModel.title5")); // NOI18N
+        masterTable.getColumnModel().getColumn(6).setHeaderValue(resourceMap.getString("masterTable.columnModel.title6")); // NOI18N
+        masterTable.getColumnModel().getColumn(7).setHeaderValue(resourceMap.getString("masterTable.columnModel.title7")); // NOI18N
+        masterTable.getColumnModel().getColumn(8).setHeaderValue(resourceMap.getString("masterTable.columnModel.title8")); // NOI18N
+        masterTable.getColumnModel().getColumn(9).setHeaderValue(resourceMap.getString("masterTable.columnModel.title9")); // NOI18N
+
+        javax.swing.ActionMap actionMap = org.jdesktop.application.Application.getInstance(mapaadmin.MapaAdminApp.class).getContext().getActionMap(MapaAdminView.class, this);
+        newButton.setAction(actionMap.get("newRecord")); // NOI18N
+        newButton.setIcon(resourceMap.getIcon("newButton.icon")); // NOI18N
+        newButton.setText(resourceMap.getString("newButton.text")); // NOI18N
+        newButton.setToolTipText(resourceMap.getString("newButton.toolTipText")); // NOI18N
+        newButton.setName("newButton"); // NOI18N
+
+        deleteButton.setAction(actionMap.get("deleteRecord")); // NOI18N
+        deleteButton.setIcon(resourceMap.getIcon("deleteButton.icon")); // NOI18N
+        deleteButton.setText(resourceMap.getString("deleteButton.text")); // NOI18N
+        deleteButton.setToolTipText(resourceMap.getString("deleteButton.toolTipText")); // NOI18N
+        deleteButton.setName("deleteButton"); // NOI18N
+
+        detailScrollPane.setName("detailScrollPane"); // NOI18N
+
+        detailTable.setName("detailTable"); // NOI18N
+
+        org.jdesktop.beansbinding.ELProperty eLProperty = org.jdesktop.beansbinding.ELProperty.create("${selectedElement.edificioPisoCollection}");
+        jTableBinding = org.jdesktop.swingbinding.SwingBindings.createJTableBinding(org.jdesktop.beansbinding.AutoBinding.UpdateStrategy.READ_WRITE, masterTable, eLProperty, detailTable);
+        bindingGroup.addBinding(jTableBinding);
+
+        detailScrollPane.setViewportView(detailTable);
+        detailTable.getColumnModel().getColumn(0).setHeaderValue(resourceMap.getString("detailTable.columnModel.title1")); // NOI18N
+        detailTable.getColumnModel().getColumn(1).setHeaderValue(resourceMap.getString("detailTable.columnModel.title1")); // NOI18N
+
+        deleteDetailButton.setAction(actionMap.get("deleteDetailRecord")); // NOI18N
+        deleteDetailButton.setIcon(resourceMap.getIcon("deleteDetailButton.icon")); // NOI18N
+        deleteDetailButton.setText(resourceMap.getString("deleteDetailButton.text")); // NOI18N
+        deleteDetailButton.setToolTipText(resourceMap.getString("deleteDetailButton.toolTipText")); // NOI18N
+        deleteDetailButton.setName("deleteDetailButton"); // NOI18N
+
+        newDetailButton.setAction(actionMap.get("newDetailRecord")); // NOI18N
+        newDetailButton.setIcon(resourceMap.getIcon("newDetailButton.icon")); // NOI18N
+        newDetailButton.setText(resourceMap.getString("newDetailButton.text")); // NOI18N
+        newDetailButton.setToolTipText(resourceMap.getString("newDetailButton.toolTipText")); // NOI18N
+        newDetailButton.setName("newDetailButton"); // NOI18N
+
+        jButton1.setAction(actionMap.get("editEdificio")); // NOI18N
+        jButton1.setIcon(resourceMap.getIcon("jButton1.icon")); // NOI18N
+        jButton1.setText(resourceMap.getString("jButton1.text")); // NOI18N
+        jButton1.setToolTipText(resourceMap.getString("jButton1.toolTipText")); // NOI18N
+        jButton1.setName("jButton1"); // NOI18N
+
+        jLabel1.setText(resourceMap.getString("jLabel1.text")); // NOI18N
+        jLabel1.setName("jLabel1"); // NOI18N
+
+        jTextField1.setName("jTextField1"); // NOI18N
+
+        org.jdesktop.beansbinding.Binding binding = org.jdesktop.beansbinding.Bindings.createAutoBinding(org.jdesktop.beansbinding.AutoBinding.UpdateStrategy.READ_WRITE, masterTable, org.jdesktop.beansbinding.ELProperty.create("${rowSorter}"), jTextField1, org.jdesktop.beansbinding.BeanProperty.create("text"));
+        binding.setConverter(rowSorterToStringConverter1);
+        bindingGroup.addBinding(binding);
+
+        jScrollPane1.setName("jScrollPane1"); // NOI18N
+
+        espacioTable.setName("espacioTable"); // NOI18N
+
+        eLProperty = org.jdesktop.beansbinding.ELProperty.create("${selectedElement.edificioEspacioCollection}");
+        jTableBinding = org.jdesktop.swingbinding.SwingBindings.createJTableBinding(org.jdesktop.beansbinding.AutoBinding.UpdateStrategy.READ_WRITE, detailTable, eLProperty, espacioTable);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${espacioTipo.nomTipoEspacio}"));
+        columnBinding.setColumnName("Espacio Tipo.nom Tipo Espacio");
+        columnBinding.setColumnClass(String.class);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${nomEspacio}"));
+        columnBinding.setColumnName("Nom Espacio");
+        columnBinding.setColumnClass(String.class);
+        jTableBinding.setSourceUnreadableValue(java.util.Collections.emptyList());
+        bindingGroup.addBinding(jTableBinding);
+        jTableBinding.bind();
+        jScrollPane1.setViewportView(espacioTable);
+        espacioTable.getColumnModel().getColumn(0).setHeaderValue(resourceMap.getString("espacioTable.columnModel.title0")); // NOI18N
+        espacioTable.getColumnModel().getColumn(1).setHeaderValue(resourceMap.getString("espacioTable.columnModel.title1")); // NOI18N
+
+        jButton2.setAction(actionMap.get("deleteEspacioRecord")); // NOI18N
+        jButton2.setIcon(resourceMap.getIcon("jButton2.icon")); // NOI18N
+        jButton2.setText(resourceMap.getString("jButton2.text")); // NOI18N
+        jButton2.setName("jButton2"); // NOI18N
+
+        jButton3.setAction(actionMap.get("newEspacioRecord")); // NOI18N
+        jButton3.setIcon(resourceMap.getIcon("jButton3.icon")); // NOI18N
+        jButton3.setText(resourceMap.getString("jButton3.text")); // NOI18N
+        jButton3.setName("jButton3"); // NOI18N
+
+        jButton4.setAction(actionMap.get("editPiso")); // NOI18N
+        jButton4.setIcon(resourceMap.getIcon("jButton4.icon")); // NOI18N
+        jButton4.setText(resourceMap.getString("jButton4.text")); // NOI18N
+        jButton4.setToolTipText(resourceMap.getString("jButton4.toolTipText")); // NOI18N
+        jButton4.setName("jButton4"); // NOI18N
+
+        jButton5.setAction(actionMap.get("editEspacio")); // NOI18N
+        jButton5.setIcon(resourceMap.getIcon("jButton5.icon")); // NOI18N
+        jButton5.setText(resourceMap.getString("jButton5.text")); // NOI18N
+        jButton5.setToolTipText(resourceMap.getString("jButton5.toolTipText")); // NOI18N
+        jButton5.setName("jButton5"); // NOI18N
+
+        jScrollPane2.setName("jScrollPane2"); // NOI18N
+
+        tblFuncionario.setName("tblFuncionario"); // NOI18N
+
+        eLProperty = org.jdesktop.beansbinding.ELProperty.create("${selectedElement.funcionarioEspacioCollection}");
+        jTableBinding = org.jdesktop.swingbinding.SwingBindings.createJTableBinding(org.jdesktop.beansbinding.AutoBinding.UpdateStrategy.READ_WRITE, espacioTable, eLProperty, tblFuncionario);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${nomFuncionario}"));
+        columnBinding.setColumnName("Nom Funcionario");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        columnBinding = jTableBinding.addColumnBinding(org.jdesktop.beansbinding.ELProperty.create("${cargo.nomCargo}"));
+        columnBinding.setColumnName("Cargo.nom Cargo");
+        columnBinding.setColumnClass(String.class);
+        columnBinding.setEditable(false);
+        jTableBinding.setSourceUnreadableValue(java.util.Collections.emptyList());
+        bindingGroup.addBinding(jTableBinding);
+        jTableBinding.bind();
+        jScrollPane2.setViewportView(tblFuncionario);
+        tblFuncionario.getColumnModel().getColumn(0).setHeaderValue(resourceMap.getString("tblFuncionario.columnModel.title0")); // NOI18N
+        tblFuncionario.getColumnModel().getColumn(1).setHeaderValue(resourceMap.getString("tblFuncionario.columnModel.title1")); // NOI18N
+
+        refreshButton.setAction(actionMap.get("refresh")); // NOI18N
+        refreshButton.setText(resourceMap.getString("refreshButton.text")); // NOI18N
+        refreshButton.setName("refreshButton"); // NOI18N
+
+        saveButton.setAction(actionMap.get("save")); // NOI18N
+        saveButton.setText(resourceMap.getString("saveButton.text")); // NOI18N
+        saveButton.setName("saveButton"); // NOI18N
+
+        jButton6.setIcon(resourceMap.getIcon("jButton6.icon")); // NOI18N
+        jButton6.setText(resourceMap.getString("jButton6.text")); // NOI18N
+        jButton6.setToolTipText(resourceMap.getString("jButton6.toolTipText")); // NOI18N
+        jButton6.setName("jButton6"); // NOI18N
+
+        jButton7.setIcon(resourceMap.getIcon("jButton7.icon")); // NOI18N
+        jButton7.setText(resourceMap.getString("jButton7.text")); // NOI18N
+        jButton7.setToolTipText(resourceMap.getString("jButton7.toolTipText")); // NOI18N
+        jButton7.setName("jButton7"); // NOI18N
+
+        jButton8.setIcon(resourceMap.getIcon("jButton8.icon")); // NOI18N
+        jButton8.setText(resourceMap.getString("jButton8.text")); // NOI18N
+        jButton8.setToolTipText(resourceMap.getString("jButton8.toolTipText")); // NOI18N
+        jButton8.setName("jButton8"); // NOI18N
+
+        javax.swing.GroupLayout mainPanelLayout = new javax.swing.GroupLayout(mainPanel);
+        mainPanel.setLayout(mainPanelLayout);
+        mainPanelLayout.setHorizontalGroup(
+            mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainPanelLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addGroup(mainPanelLayout.createSequentialGroup()
+                        .addComponent(jButton8)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jButton7)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jButton6)
+                        .addGap(61, 61, 61)
+                        .addComponent(refreshButton)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(saveButton))
+                    .addComponent(jScrollPane2, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, 659, Short.MAX_VALUE)
+                    .addComponent(masterScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 659, Short.MAX_VALUE)
+                    .addGroup(mainPanelLayout.createSequentialGroup()
+                        .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainPanelLayout.createSequentialGroup()
+                                .addComponent(newDetailButton)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jButton4)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(deleteDetailButton, javax.swing.GroupLayout.PREFERRED_SIZE, 34, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, mainPanelLayout.createSequentialGroup()
+                                .addComponent(jLabel1)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 165, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 87, Short.MAX_VALUE))
+                            .addComponent(detailScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 308, Short.MAX_VALUE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 18, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addGroup(mainPanelLayout.createSequentialGroup()
+                                .addComponent(newButton)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jButton1)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(deleteButton))
+                            .addGroup(mainPanelLayout.createSequentialGroup()
+                                .addComponent(jButton3)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jButton5)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jButton2))
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 333, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                .addGap(20, 20, 20))
+        );
+
+        mainPanelLayout.linkSize(javax.swing.SwingConstants.HORIZONTAL, new java.awt.Component[] {deleteButton, newButton});
+
+        mainPanelLayout.linkSize(javax.swing.SwingConstants.HORIZONTAL, new java.awt.Component[] {refreshButton, saveButton});
+
+        mainPanelLayout.setVerticalGroup(
+            mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(mainPanelLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(masterScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 191, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jLabel1)
+                        .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(deleteButton)
+                        .addComponent(newButton)
+                        .addComponent(jButton1)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(detailScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 130, Short.MAX_VALUE)
+                    .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 130, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jButton2)
+                        .addComponent(jButton3))
+                    .addComponent(jButton5)
+                    .addComponent(deleteDetailButton)
+                    .addComponent(jButton4)
+                    .addComponent(newDetailButton))
+                .addGap(18, 18, 18)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 97, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(saveButton)
+                    .addComponent(refreshButton)
+                    .addComponent(jButton6)
+                    .addComponent(jButton7)
+                    .addComponent(jButton8))
+                .addGap(21, 21, 21))
+        );
+
+        menuBar.setName("menuBar"); // NOI18N
+
+        fileMenu.setMnemonic('A');
+        fileMenu.setText(resourceMap.getString("fileMenu.text")); // NOI18N
+        fileMenu.setName("fileMenu"); // NOI18N
+
+        newRecordMenuItem.setAction(actionMap.get("newRecord")); // NOI18N
+        newRecordMenuItem.setText(resourceMap.getString("newRecordMenuItem.text")); // NOI18N
+        newRecordMenuItem.setName("newRecordMenuItem"); // NOI18N
+        fileMenu.add(newRecordMenuItem);
+
+        deleteRecordMenuItem.setAction(actionMap.get("deleteRecord")); // NOI18N
+        deleteRecordMenuItem.setText(resourceMap.getString("deleteRecordMenuItem.text")); // NOI18N
+        deleteRecordMenuItem.setToolTipText(resourceMap.getString("deleteRecordMenuItem.toolTipText")); // NOI18N
+        deleteRecordMenuItem.setName("deleteRecordMenuItem"); // NOI18N
+        fileMenu.add(deleteRecordMenuItem);
+
+        jSeparator1.setName("jSeparator1"); // NOI18N
+        fileMenu.add(jSeparator1);
+
+        saveMenuItem.setAction(actionMap.get("save")); // NOI18N
+        saveMenuItem.setText(resourceMap.getString("saveMenuItem.text")); // NOI18N
+        saveMenuItem.setName("saveMenuItem"); // NOI18N
+        fileMenu.add(saveMenuItem);
+
+        refreshMenuItem.setAction(actionMap.get("refresh")); // NOI18N
+        refreshMenuItem.setText(resourceMap.getString("refreshMenuItem.text")); // NOI18N
+        refreshMenuItem.setName("refreshMenuItem"); // NOI18N
+        fileMenu.add(refreshMenuItem);
+
+        jSeparator2.setName("jSeparator2"); // NOI18N
+        fileMenu.add(jSeparator2);
+
+        exitMenuItem.setAction(actionMap.get("quit")); // NOI18N
+        exitMenuItem.setText(resourceMap.getString("exitMenuItem.text")); // NOI18N
+        exitMenuItem.setName("exitMenuItem"); // NOI18N
+        fileMenu.add(exitMenuItem);
+
+        menuBar.add(fileMenu);
+
+        jMenu1.setText(resourceMap.getString("jMenu1.text")); // NOI18N
+        jMenu1.setName("jMenu1"); // NOI18N
+
+        jMenuItem1.setText(resourceMap.getString("jMenuItem1.text")); // NOI18N
+        jMenuItem1.setName("jMenuItem1"); // NOI18N
+        jMenuItem1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem1ActionPerformed(evt);
+            }
+        });
+        jMenu1.add(jMenuItem1);
+
+        jmiCargos.setText(resourceMap.getString("jmiCargos.text")); // NOI18N
+        jmiCargos.setName("jmiCargos"); // NOI18N
+        jmiCargos.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jmiCargosActionPerformed(evt);
+            }
+        });
+        jMenu1.add(jmiCargos);
+
+        jSeparator3.setName("jSeparator3"); // NOI18N
+        jMenu1.add(jSeparator3);
+
+        jMenuItem2.setText(resourceMap.getString("jMenuItem2.text")); // NOI18N
+        jMenuItem2.setName("jMenuItem2"); // NOI18N
+        jMenu1.add(jMenuItem2);
+
+        menuBar.add(jMenu1);
+
+        helpMenu.setMnemonic('Y');
+        helpMenu.setText(resourceMap.getString("helpMenu.text")); // NOI18N
+        helpMenu.setName("helpMenu"); // NOI18N
+
+        aboutMenuItem.setAction(actionMap.get("showAboutBox")); // NOI18N
+        aboutMenuItem.setText(resourceMap.getString("aboutMenuItem.text")); // NOI18N
+        aboutMenuItem.setName("aboutMenuItem"); // NOI18N
+        helpMenu.add(aboutMenuItem);
+
+        menuBar.add(helpMenu);
+
+        statusPanel.setName("statusPanel"); // NOI18N
+
+        statusPanelSeparator.setName("statusPanelSeparator"); // NOI18N
+
+        statusMessageLabel.setName("statusMessageLabel"); // NOI18N
+
+        statusAnimationLabel.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        statusAnimationLabel.setName("statusAnimationLabel"); // NOI18N
+
+        progressBar.setName("progressBar"); // NOI18N
+
+        javax.swing.GroupLayout statusPanelLayout = new javax.swing.GroupLayout(statusPanel);
+        statusPanel.setLayout(statusPanelLayout);
+        statusPanelLayout.setHorizontalGroup(
+            statusPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(statusPanelLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(statusPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(statusPanelLayout.createSequentialGroup()
+                        .addComponent(statusMessageLabel)
+                        .addGap(626, 626, 626)
+                        .addComponent(statusPanelSeparator, javax.swing.GroupLayout.DEFAULT_SIZE, 53, Short.MAX_VALUE))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, statusPanelLayout.createSequentialGroup()
+                        .addComponent(progressBar, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(statusAnimationLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap())))
+        );
+        statusPanelLayout.setVerticalGroup(
+            statusPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(statusPanelLayout.createSequentialGroup()
+                .addComponent(statusPanelSeparator, javax.swing.GroupLayout.PREFERRED_SIZE, 2, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(statusPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(statusPanelLayout.createSequentialGroup()
+                        .addComponent(progressBar, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap())
+                    .addGroup(statusPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGroup(statusPanelLayout.createSequentialGroup()
+                            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 20, Short.MAX_VALUE)
+                            .addComponent(statusMessageLabel)
+                            .addGap(12, 12, 12))
+                        .addGroup(statusPanelLayout.createSequentialGroup()
+                            .addComponent(statusAnimationLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addContainerGap()))))
+        );
+
+        rowSorterToStringConverter1.setTable(masterTable);
+
+        setComponent(mainPanel);
+        setMenuBar(menuBar);
+        setStatusBar(statusPanel);
+
+        bindingGroup.bind();
+    }// </editor-fold>//GEN-END:initComponents
+
+    private void jMenuItem1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem1ActionPerformed
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewSede sede = new JDNewSede(mainFrame, true);
+//        sede.addWindowListener(new java.awt.event.WindowAdapter() {
+//            @Override
+//            public void windowClosing(java.awt.event.WindowEvent e) {
+//                System.exit(0);
+//            }
+//        });
+        sede.setVisible(true);
+    }//GEN-LAST:event_jMenuItem1ActionPerformed
+
+    private void jmiCargosActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jmiCargosActionPerformed
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewCargo cargo = new JDNewCargo(mainFrame, true);
+        cargo.setVisible(true);
+    }//GEN-LAST:event_jmiCargosActionPerformed
+
+    @Action(enabledProperty = "recordSelected")
+    public void editEdificio() {
+        setSaveNeeded(true);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewBuilding ce = new JDNewBuilding(mainFrame, false);
+        ce.setCurrentRecord(list.get(masterTable.convertRowIndexToModel(masterTable.getSelectedRow())));
+        ce.setVisible(true);
+        if (ce.isEdificioConfirmed()) {
+            save().run();
+        } else {
+            refresh().run();
+        }
+
+    }
+
+    @Action(enabledProperty = "recordSelected")
+    public void editPiso() {
+        setSaveNeeded(true);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewFloor nf = new JDNewFloor(mainFrame, true);
+        nf.setCurrentRecord(edificioPisoList.get(detailTable.convertRowIndexToModel(detailTable.getSelectedRow())));
+        nf.setVisible(true);
+        if (nf.isPisoConfirmed()) {
+            save().run();
+        } else {
+            refresh().run();
+        }
+    }
+
+    @Action(enabledProperty = "recordSelected")
+    public void editEspacio(){
+        setSaveNeeded(true);
+        int indexEdf = masterTable.getSelectedRow();
+        mapaadmin.EdificioInfo edfInfo = list.get(masterTable.convertRowIndexToModel(indexEdf));
+        Collection<mapaadmin.EdificioPiso> edfPiso = edfInfo.getEdificioPisoCollection();
+        List<mapaadmin.EdificioPiso> ledf = (List<EdificioPiso>) edfPiso;
+        int indexPiso = detailTable.getSelectedRow();
+        mapaadmin.EdificioPiso E = ledf.get(detailTable.convertRowIndexToModel(indexPiso));
+        Collection<mapaadmin.EdificioEspacio> es = E.getEdificioEspacioCollection();
+        List<mapaadmin.EdificioEspacio> lstEsp = new ArrayList<EdificioEspacio>((List) es);
+        JFrame mainFrame = MapaAdminApp.getApplication().getMainFrame();
+        JDNewFuncionario2 nf = new JDNewFuncionario2((mainFrame), true,espacioTable, es);
+        nf.setCurrentRecord(lstEsp.get(espacioTable.convertRowIndexToModel(espacioTable.getSelectedRow())));
+        nf.setVisible(true);
+    }
+    // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JButton deleteButton;
+    private javax.swing.JButton deleteDetailButton;
+    private javax.swing.JScrollPane detailScrollPane;
+    private javax.swing.JTable detailTable;
+    private java.util.List<mapaadmin.EdificioEspacio> edificioEspacioList;
+    private javax.persistence.Query edificioEspacioQuery;
+    private java.util.List<mapaadmin.EdificioPiso> edificioPisoList;
+    private javax.persistence.Query edificioPisoQuery;
+    private javax.persistence.EntityManager entityManager;
+    private javax.swing.JTable espacioTable;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
+    private javax.swing.JButton jButton4;
+    private javax.swing.JButton jButton5;
+    private javax.swing.JButton jButton6;
+    private javax.swing.JButton jButton7;
+    private javax.swing.JButton jButton8;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JMenu jMenu1;
+    private javax.swing.JMenuItem jMenuItem1;
+    private javax.swing.JMenuItem jMenuItem2;
+    private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane2;
+    private javax.swing.JSeparator jSeparator1;
+    private javax.swing.JSeparator jSeparator2;
+    private javax.swing.JSeparator jSeparator3;
+    private javax.swing.JTextField jTextField1;
+    private javax.swing.JMenuItem jmiCargos;
+    private java.util.List<mapaadmin.EdificioInfo> list;
+    private javax.swing.JPanel mainPanel;
+    private javax.swing.JScrollPane masterScrollPane;
+    private javax.swing.JTable masterTable;
+    private javax.swing.JMenuBar menuBar;
+    private javax.swing.JButton newButton;
+    private javax.swing.JButton newDetailButton;
+    private javax.swing.JProgressBar progressBar;
+    private javax.persistence.Query query;
+    private javax.swing.JButton refreshButton;
+    private mapaadmin.RowSorterToStringConverter rowSorterToStringConverter1;
+    private javax.swing.JButton saveButton;
+    private javax.swing.JLabel statusAnimationLabel;
+    private javax.swing.JLabel statusMessageLabel;
+    private javax.swing.JPanel statusPanel;
+    private javax.swing.JTable tblFuncionario;
+    private org.jdesktop.beansbinding.BindingGroup bindingGroup;
+    // End of variables declaration//GEN-END:variables
+    private final Timer messageTimer;
+    private final Timer busyIconTimer;
+    private final Icon idleIcon;
+    private final Icon[] busyIcons = new Icon[15];
+    private int busyIconIndex = 0;
+    private JDialog aboutBox;
+    private boolean saveNeeded;
+}
