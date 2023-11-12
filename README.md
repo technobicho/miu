@@ -1,1 +1,6 @@
 # miu
+
+_Mapa Interactivo Universidad Central - 2010 _
+
+## Proyecto de grado
+El auge en la utilización de los sistemas de ubicación sobre el planeta, ha permitido que las tecnologías y los estándares crezcan a un ritmo acelerado, este documento describe como aprovechando las herramientas de software libre se logra la implementación de un sistema que permite empleando los estándares OGC ( Open Geospatial Consortium) construir un Mapa Interactivo Universitario para la Universidad Central, el cual garantizara a los usuarios determinar la ubicación de los diferentes elementos de interés dentro del campus universitario en cada una de sus sedes. El modelo que se utilizo es el de geoservicios, aplicado a soluciones administrativas, el cual permite la ubicación de construcciones, espacios, oficinas y dependencias, integrado con otros servicios informáticos como lo es la información de horarios y docentes, lo que permite obtener un valor agregado y complementa con servicios adicionales, como la especialización de la información administrativa, de igual forma se ejemplifica los beneficios de implementar un servidor de mapas que cumpla con los estándares, de esta forma se pueden lograr soluciones alternativas que simplemente consuman servicios de mapas y se puedan integrar fácilmente
